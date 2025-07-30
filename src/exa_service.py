@@ -69,24 +69,25 @@ class ExaService:
     def create_webset(
         self,
         vertical: str,
-        criteria: list[CreateEnrichmentParameters] | None = None,
+        enrichment: list[CreateEnrichmentParameters] | None = None,
     ):
         query = self.__create_search_query(vertical)
-        if criteria is None:
-            logger.debug("No criteria provided, using standard enrichment")
-            criteria = self.__create_standard_enrichment()
+
+        if enrichment is None:
+            logger.debug("No enrichment provided, using standard enrichment")
+            enrichment = self.__create_standard_enrichment()
 
         else:
             logger.debug("Criteria provided, using custom enrichment, validating...")
-            assert isinstance(criteria, list), "Criteria must be a list"
+            assert isinstance(enrichment, list), "Criteria must be a list"
             assert all(
-                isinstance(item, CreateEnrichmentParameters) for item in criteria
+                isinstance(item, CreateEnrichmentParameters) for item in enrichment
             ), "Criteria must be a list of CreateEnrichmentParameters"
             logger.debug("Validation checks passed")
 
         params = CreateWebsetParameters(
             search=query,
-            enrichments=criteria,
+            enrichments=enrichment,
         )
 
         logger.debug(f"Creating webset with params: {params}")
