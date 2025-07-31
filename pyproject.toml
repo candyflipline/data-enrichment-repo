@@ -8,6 +8,7 @@ dependencies = [
     "aiohttp>=3.12.15",
     "black>=25.1.0",
     "commitizen>=4.8.3",
+    "email-validator>=2.2.0",
     "exa-py>=1.14.19",
     "pandas>=2.3.1",
     "pydantic>=2.11.7",

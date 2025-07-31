@@ -1,6 +1,7 @@
 import os
 from typing import Any
 
+import email_validator
 import pandas as pd
 from dotenv import load_dotenv
 from exa_py import Exa
@@ -26,7 +27,9 @@ logger = setup_logger("src.exa_service")
 class ExaService:
     LIMIT = 25
     API_KEY = os.getenv("EXA_API_KEY", None)
+    print(API_KEY)
     DEFAULT_DATAFRAME_FOLDER = "data"
+    CLEAN_DF_NAME_PATTERN = "clean_df_part"
 
     def __init__(self):
         self.exa = Exa(api_key=self.API_KEY)
@@ -113,6 +116,16 @@ class ExaService:
     def get_webset(self, id: str) -> GetWebsetResponse:
         return self.exa.websets.get(id=id, expand=["items"])
 
+    def __validate_email(self, email: str) -> str | None:
+        try:
+            email_validator.validate_email(email)
+            return email
+        except email_validator.EmailNotValidError:
+            return None
+        except Exception as e:
+            logger.error(f"Error validating email: {e}")
+            return None
+
     def webset_to_dataframe(self, webset_id: str, save: bool = True) -> pd.DataFrame:
         if not os.path.exists(self.DEFAULT_DATAFRAME_FOLDER):
             os.makedirs(self.DEFAULT_DATAFRAME_FOLDER)
@@ -170,10 +183,18 @@ class ExaService:
                 "Financials Reasoning": financials_reasoning,
             }
 
+            used_email = item_to_add.get("CEO Email", None)
+
+            if used_email:
+                validated_email = self.__validate_email(used_email)
+                if validated_email:
+                    item_to_add["CEO Email"] = validated_email
+                else:
+                    item_to_add["CEO Email"] = None
+
             items_for_dataframe.append(item_to_add)
 
         df = pd.DataFrame(items_for_dataframe)
-        logger.debug(f"Created dataframe with {len(df)} rows")
 
         if save:
             logger.debug(
@@ -200,6 +221,8 @@ class ExaService:
             dfs.append(df)
 
         combined_df = pd.concat(dfs)
+        combined_df = combined_df.drop_duplicates(subset=["Company Name"])
+        combined_df = combined_df.sort_values(by="Vertical", ascending=True)  # type: ignore
 
         if save:
             logger.debug(
@@ -209,4 +232,26 @@ class ExaService:
                 f"{self.DEFAULT_DATAFRAME_FOLDER}/combined_df.csv", index=False
             )
 
+        return combined_df
+
+    def combine_saved_df(self, save: bool = True) -> pd.DataFrame:
+        df_files = os.listdir(self.DEFAULT_DATAFRAME_FOLDER)
+        df_files = [
+            file for file in df_files if file.startswith(self.CLEAN_DF_NAME_PATTERN)
+        ]
+        dfs: list[pd.DataFrame] = []
+        for file in df_files:
+            df = pd.read_csv(f"{self.DEFAULT_DATAFRAME_FOLDER}/{file}")  # type: ignore
+            dfs.append(df)
+        combined_df = pd.concat(dfs)
+        combined_df = combined_df.drop_duplicates(subset=["Company Name"])
+        combined_df = combined_df.sort_values(by="Vertical", ascending=True)  # type: ignore
+
+        if save:
+            logger.debug(
+                f"Saving combined dataframe to {self.DEFAULT_DATAFRAME_FOLDER}/combined_df.csv"
+            )
+            combined_df.to_csv(
+                f"{self.DEFAULT_DATAFRAME_FOLDER}/total_combined_df.csv", index=False
+            )
         return combined_df
